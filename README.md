@@ -37,7 +37,7 @@ database/      SQL inicial (sin tablas de negocio)
 docker-compose.yml
 ```
 
-El backend conserva el modelo y CRUD genérico `Item` que ya existían. No se han añadido modelos ni rutas de solicitudes; el único endpoint nuevo es el health check.
+El backend conserva el modelo y CRUD genérico `Item` y ofrece la creación de solicitudes en `POST /api/requests/`. El endpoint asigna el estado inicial en el servidor.
 
 ## Preparar y levantar el entorno
 
@@ -59,6 +59,7 @@ Compose espera a que el health check de MySQL termine antes de iniciar Django. D
 - Backend: <http://localhost:8000>
 - Health check: <http://localhost:8000/api/health/>
 - API browsable existente: <http://localhost:8000/api/>
+- Crear solicitud: `POST http://localhost:8000/api/requests/`
 - Esquema OpenAPI: <http://localhost:8000/api/schema/>
 - Swagger UI: <http://localhost:8000/api/docs/>
 - MySQL: solo en la red privada de Compose, en `db:3306`; no se publica un puerto en el host.

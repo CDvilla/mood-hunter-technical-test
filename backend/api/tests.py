@@ -1,9 +1,16 @@
 import json
 
+from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from api.models import Item
+from api.domain import (
+    ALLOWED_STATUS_TRANSITIONS,
+    InvalidRequestStatusTransition,
+    validate_request_status_transition,
+)
+from api.models import Item, Request
+from api.serializers import RequestSerializer
 
 
 class HealthCheckTests(APITestCase):
@@ -60,3 +67,84 @@ class ItemApiTests(APITestCase):
         delete_response = self.client.delete(f"/api/items/{item.id}/")
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Item.objects.filter(id=item.id).exists())
+
+
+class RequestCreationApiTests(APITestCase):
+    def test_create_request_returns_created_request(self):
+        response = self.client.post(
+            "/api/requests/",
+            {
+                "title": "Review application",
+                "description": "Review the submitted application.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Request.objects.count(), 1)
+
+        request = Request.objects.get()
+        self.assertEqual(response.data, RequestSerializer(request).data)
+        self.assertEqual(response.data["title"], "Review application")
+        self.assertEqual(
+            response.data["description"],
+            "Review the submitted application.",
+        )
+        self.assertEqual(response.data["status"], Request.Status.CREATED)
+        self.assertIsNotNone(response.data["id"])
+        self.assertIsNotNone(request.created_at)
+        self.assertIsNotNone(request.updated_at)
+
+    def test_client_cannot_choose_initial_status(self):
+        response = self.client.post(
+            "/api/requests/",
+            {
+                "title": "Review application",
+                "description": "Review the submitted application.",
+                "status": Request.Status.DONE,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], Request.Status.CREATED)
+
+    def test_invalid_payloads_do_not_create_requests(self):
+        invalid_payloads = [
+            {"description": "Missing title"},
+            {"title": "Missing description"},
+            {"title": "", "description": "A description"},
+            {"title": "A title", "description": ""},
+            {"title": "x" * 201, "description": "A description"},
+        ]
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    "/api/requests/",
+                    payload,
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(Request.objects.count(), 0)
+
+
+class RequestStatusTransitionTests(SimpleTestCase):
+    def test_complete_transition_matrix(self):
+        statuses = Request.Status.values
+
+        for current_status in statuses:
+            for next_status in statuses:
+                allowed = next_status in ALLOWED_STATUS_TRANSITIONS[current_status]
+                with self.subTest(
+                    current_status=current_status,
+                    next_status=next_status,
+                ):
+                    if allowed:
+                        validate_request_status_transition(current_status, next_status)
+                    else:
+                        with self.assertRaises(InvalidRequestStatusTransition):
+                            validate_request_status_transition(
+                                current_status,
+                                next_status,
+                            )
