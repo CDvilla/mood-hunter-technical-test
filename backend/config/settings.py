@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework.authtoken",
     "drf_spectacular",
     "api",
 ]
@@ -102,15 +103,47 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated",
     ],
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Mood Hunter API",
-    "DESCRIPTION": "API REST para la gestión y seguimiento de solicitudes.",
+    "DESCRIPTION": (
+        "API REST para la gestión y seguimiento de solicitudes. Los endpoints "
+        "protegidos utilizan DRF TokenAuthentication: envía el encabezado "
+        "`Authorization: Token <token>`. En Swagger UI, usa **Authorize** y "
+        "escribe solo el valor del token; Swagger UI añade el prefijo `Token`."
+    ),
     "VERSION": "1.0.0",
+    "SWAGGER_UI_SETTINGS": """{
+      "persistAuthorization": true,
+      "plugins": [
+        () => ({
+          statePlugins: {
+            auth: {
+              wrapActions: {
+                authorize: (original) => (payload) => {
+                  const auth = payload.tokenAuth;
+                  if (auth && typeof auth.value === "string") {
+                    const value = auth.value.replace(/^Token\\s+/i, "");
+                    payload = {
+                      ...payload,
+                      tokenAuth: { ...auth, value: `Token ${value}` }
+                    };
+                  }
+                  return original(payload);
+                }
+              }
+            }
+          }
+        })
+      ]
+    }""",
 }
 
 CORS_ALLOWED_ORIGINS = [

@@ -37,11 +37,11 @@ database/      SQL inicial (sin tablas de negocio)
 docker-compose.yml
 ```
 
-El backend conserva el modelo y CRUD genérico `Item` y ofrece la creación de solicitudes en `POST /api/requests/`. El endpoint asigna el estado inicial en el servidor.
+El backend conserva el modelo y CRUD genérico `Item`, ofrece la creación de solicitudes en `POST /api/requests/` y expone el catálogo de estados en `GET /api/statuses/`. El estado inicial se asigna en el servidor.
 
 ## Preparar y levantar el entorno
 
-Desde Ubuntu/WSL2:
+Desde Ubuntu/WSL2, antes de levantar el proyecto por primera vez, completa `.env` con una clave secreta fuerte para Django y configura `DJANGO_SUPERUSER_USERNAME` y `DJANGO_SUPERUSER_PASSWORD` con credenciales iniciales únicas y robustas. No guardes ni compartas esos valores en Git. La contraseña del administrador debe satisfacer los validadores de contraseñas de Django.
 
 ```bash
 cd /home/carlos/projects/technical_test
@@ -51,7 +51,7 @@ docker compose up --build
 
 El `.env` incluido contiene valores ilustrativos exclusivos para desarrollo local. La copia protege esos valores de Git, pero no son adecuados para producción. Cambia las claves y contraseñas y configura `DJANGO_DEBUG=false` antes de desplegar.
 
-Compose espera a que el health check de MySQL termine antes de iniciar Django. Django ejecuta `migrate` al arrancar; si una migración falla, el contenedor no continúa como si hubiera iniciado correctamente. Los cambios en `backend/` y `frontend/` se reflejan mediante bind mounts y hot reload.
+Compose espera a que el health check de MySQL termine antes de iniciar Django. Django ejecuta `migrate` y luego `ensure_admin_user` al arrancar. Este comando crea el superusuario nativo una sola vez; en arranques posteriores conserva la cuenta existente. Si falta una variable, la contraseña no cumple las validaciones o una migración falla, el contenedor no continúa como si hubiera iniciado correctamente. Los cambios en `backend/` y `frontend/` se reflejan mediante bind mounts y hot reload.
 
 ## Acceso
 
@@ -60,17 +60,60 @@ Compose espera a que el health check de MySQL termine antes de iniciar Django. D
 - Health check: <http://localhost:8000/api/health/>
 - API browsable existente: <http://localhost:8000/api/>
 - Crear solicitud: `POST http://localhost:8000/api/requests/`
+- Consultar estados: `GET http://localhost:8000/api/statuses/`
+- Iniciar sesión: `POST http://localhost:8000/api/auth/login/`
+- Cerrar sesión: `POST http://localhost:8000/api/auth/logout/`
 - Esquema OpenAPI: <http://localhost:8000/api/schema/>
 - Swagger UI: <http://localhost:8000/api/docs/>
 - MySQL: solo en la red privada de Compose, en `db:3306`; no se publica un puerto en el host.
 
 El esquema OpenAPI y Swagger UI permiten consultar y probar la API cuando Docker Compose está ejecutándose.
 
+`POST /api/requests/` recibe únicamente `title` y `description`; el backend busca y asigna automáticamente el estado cuyo `tag` es `created`. Internamente, `Request` se relaciona con `Status` mediante su clave primaria numérica; la API identifica el estado únicamente por su `tag` y no expone el ID interno. `GET /api/statuses/` devuelve cada estado con `tag` y `name`; el catálogo se administra mediante migraciones y no ofrece operaciones de escritura por API.
+
+La respuesta del catálogo tiene esta estructura:
+
+```json
+[
+  { "tag": "created", "name": "Creada" },
+  { "tag": "in_review", "name": "En revisión" },
+  { "tag": "in_progress", "name": "En progreso" },
+  { "tag": "paused", "name": "Pausada" },
+  { "tag": "done", "name": "Finalizada" }
+]
+```
+
+### Autenticación por token
+
+Los endpoints de negocio requieren autenticación DRF por token. Inicia sesión con las credenciales definidas en `.env`:
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login/ \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"TU_USUARIO_ADMIN","password":"TU_CONTRASEÑA"}'
+```
+
+La respuesta contiene `{"token":"..."}`. En las siguientes peticiones, incluye el token como `Authorization: Token <token>`. Por ejemplo:
+
+```bash
+curl http://localhost:8000/api/statuses/ \
+  -H 'Authorization: Token TU_TOKEN'
+```
+
+Para invalidar el token actual:
+
+```bash
+curl -X POST http://localhost:8000/api/auth/logout/ \
+  -H 'Authorization: Token TU_TOKEN'
+```
+
+Swagger UI en `/api/docs/` ofrece el botón **Authorize** para introducir `Token <token>` (incluido el prefijo) y probar los endpoints protegidos. El health check, el esquema OpenAPI y Swagger UI permanecen públicos; los endpoints de negocio requieren token.
+
 La URL que usa el navegador para la API se configura con `VITE_API_BASE_URL`. Los orígenes del frontend permitidos por el backend se configuran con `CORS_ALLOWED_ORIGINS`.
 
 ## Migraciones
 
-Las migraciones se aplican al iniciar el servicio. Para ejecutarlas manualmente:
+Las migraciones se aplican al iniciar el servicio. La migración del catálogo crea automáticamente los cinco estados iniciales y convierte las solicitudes existentes sin eliminar sus datos. Para ejecutarlas manualmente:
 
 ```bash
 docker compose exec backend python manage.py migrate
