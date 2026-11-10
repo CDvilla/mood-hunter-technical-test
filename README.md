@@ -59,7 +59,11 @@ Compose espera a que el health check de MySQL termine antes de iniciar Django. D
 - Backend: <http://localhost:8000>
 - Health check: <http://localhost:8000/api/health/>
 - API browsable existente: <http://localhost:8000/api/>
+- Esquema OpenAPI: <http://localhost:8000/api/schema/>
+- Swagger UI: <http://localhost:8000/api/docs/>
 - MySQL: solo en la red privada de Compose, en `db:3306`; no se publica un puerto en el host.
+
+El esquema OpenAPI y Swagger UI permiten consultar y probar la API cuando Docker Compose está ejecutándose.
 
 La URL que usa el navegador para la API se configura con `VITE_API_BASE_URL`. Los orígenes del frontend permitidos por el backend se configuran con `CORS_ALLOWED_ORIGINS`.
 
