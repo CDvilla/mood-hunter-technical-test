@@ -1,9 +1,34 @@
+import { useState } from "react";
+import Dashboard from "./components/Dashboard.jsx";
+import Login from "./components/Login.jsx";
+import { isAuthenticated, logout } from "./services/auth.js";
+
 export default function App() {
-  return (
-    <main className="status-card">
-      <p className="eyebrow">Technical Test</p>
-      <h1>Frontend funcionando</h1>
-      <p>La aplicación React está lista para comenzar el desarrollo.</p>
-    </main>
+  const [authenticated, setAuthenticated] = useState(isAuthenticated);
+  const [notice, setNotice] = useState("");
+
+  function handleLogin() {
+    setNotice("");
+    setAuthenticated(true);
+  }
+
+  async function handleLogout() {
+    setNotice("");
+
+    try {
+      await logout();
+    } catch {
+      setNotice(
+        "La sesión local se cerró, pero no fue posible invalidar el token en el servidor.",
+      );
+    } finally {
+      setAuthenticated(false);
+    }
+  }
+
+  return authenticated ? (
+    <Dashboard onLogout={handleLogout} />
+  ) : (
+    <Login onLogin={handleLogin} notice={notice} />
   );
 }

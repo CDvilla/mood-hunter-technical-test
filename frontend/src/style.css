@@ -15,18 +15,31 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page-shell {
   display: grid;
+  min-height: 100vh;
   place-items: center;
   padding: 24px;
 }
 
-.status-card {
+.login-card,
+.dashboard {
   width: min(100%, 560px);
-  padding: 48px;
   border: 1px solid #e1e6ef;
   border-radius: 16px;
   background: #fff;
   box-shadow: 0 16px 48px rgb(23 32 51 / 8%);
+}
+
+.login-card {
+  padding: 40px;
 }
 
 .eyebrow {
@@ -43,8 +56,99 @@ h1 {
   font-size: clamp(1.7rem, 5vw, 2.4rem);
 }
 
-.status-card > p:last-child {
-  margin: 14px 0 0;
+.login-description {
+  margin: 12px 0 24px;
   color: #596579;
   line-height: 1.6;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-form label {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 46px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid #cbd3e1;
+  border-radius: 8px;
+  color: inherit;
+}
+
+.login-form input:focus {
+  border-color: #5263d9;
+  outline: 3px solid rgb(82 99 217 / 18%);
+}
+
+.login-form button,
+.logout-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #5263d9;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.login-form button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.error-message,
+.notice-message {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.error-message {
+  border: 1px solid #f0b7bc;
+  background: #fff1f2;
+  color: #9f1d2b;
+}
+
+.notice-message {
+  border: 1px solid #f2d18a;
+  background: #fff8e6;
+  color: #76520b;
+}
+
+.dashboard {
+  width: min(100%, 960px);
+  min-height: 360px;
+  padding: 32px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.logout-button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+  .login-card,
+  .dashboard {
+    padding: 24px;
+  }
+
+  .dashboard-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
