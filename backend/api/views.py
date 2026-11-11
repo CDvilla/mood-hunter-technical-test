@@ -1,10 +1,11 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db import transaction
 from django.http import JsonResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, GenericAPIView, ListAPIView
+from rest_framework.exceptions import ValidationError
+from rest_framework.generics import GenericAPIView, ListAPIView, ListCreateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
@@ -53,10 +54,70 @@ class TokenLogoutView(APIView):
         return Response({"detail": "Successfully logged out."})
 
 
-@extend_schema(responses=RequestSerializer)
-class RequestCreateView(CreateAPIView):
-    queryset = Request.objects.all()
-    serializer_class = RequestCreateSerializer
+@extend_schema_view(
+    get=extend_schema(
+        responses=RequestSerializer(many=True),
+        parameters=[
+            OpenApiParameter(
+                "start_date",
+                str,
+                OpenApiParameter.QUERY,
+                description="Inclusive ISO date/datetime filter.",
+            ),
+            OpenApiParameter(
+                "end_date",
+                str,
+                OpenApiParameter.QUERY,
+                description="Inclusive ISO date/datetime filter.",
+            ),
+        ],
+    ),
+    post=extend_schema(
+        request=RequestCreateSerializer,
+        responses={201: RequestSerializer},
+    ),
+)
+class RequestListCreateView(ListCreateAPIView):
+    queryset = Request.objects.select_related("status").all()
+    serializer_class = RequestSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.method != "GET":
+            return queryset
+
+        start_value = self.request.query_params.get("start_date")
+        end_value = self.request.query_params.get("end_date")
+        today = timezone.localdate()
+
+        if not start_value and not end_value:
+            now = timezone.now()
+            return queryset.filter(
+                created_at__range=(now - timedelta(days=7), now)
+            )
+
+        try:
+            end_date = (
+                datetime.fromisoformat(end_value.replace("Z", "+00:00")).date()
+                if end_value
+                else today
+            )
+            start_date = (
+                datetime.fromisoformat(start_value.replace("Z", "+00:00")).date()
+                if start_value
+                else end_date - timedelta(days=7)
+            )
+        except ValueError as exc:
+            raise ValidationError(
+                {"date": "Use ISO date or datetime values for start_date and end_date."}
+            ) from exc
+
+        if start_date > end_date:
+            raise ValidationError(
+                {"date": "start_date must be earlier than or equal to end_date."}
+            )
+
+        return queryset.filter(created_at__date__range=(start_date, end_date))
 
     def create(self, request, *args, **kwargs):
         input_serializer = self.get_serializer(data=request.data)
@@ -72,6 +133,11 @@ class RequestCreateView(CreateAPIView):
             status=status.HTTP_201_CREATED,
             headers=headers,
         )
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return RequestCreateSerializer
+        return RequestSerializer
 
 
 @extend_schema(

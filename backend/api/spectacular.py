@@ -2,7 +2,7 @@ from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 
 class TokenAuthenticationScheme(OpenApiAuthenticationExtension):
-    target_class = "rest_framework.authentication.TokenAuthentication"
+    target_class = "api.authentication.TokenOrBearerAuthentication"
     name = "tokenAuth"
     priority = 1
 
@@ -13,6 +13,6 @@ class TokenAuthenticationScheme(OpenApiAuthenticationExtension):
             "name": "Authorization",
             "description": (
                 "Enter the token value only. Swagger UI adds the required "
-                "`Token ` prefix to the Authorization header."
+                "`Bearer ` prefix to the Authorization header."
             ),
         }

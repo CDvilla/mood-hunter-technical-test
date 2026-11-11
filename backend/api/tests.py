@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from django.db.models.deletion import ProtectedError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework.authtoken.models import Token
@@ -80,7 +82,11 @@ class AuthenticationApiTests(APITestCase):
         )
 
     def test_business_endpoints_reject_missing_and_invalid_tokens(self):
-        for authorization in (None, "Token invalid-token"):
+        for authorization in (
+            None,
+            "Token invalid-token",
+            "Bearer invalid-token",
+        ):
             headers = {}
             if authorization:
                 headers["HTTP_AUTHORIZATION"] = authorization
@@ -115,6 +121,16 @@ class AuthenticationApiTests(APITestCase):
                     status.HTTP_401_UNAUTHORIZED,
                 )
 
+    def test_bearer_authentication_accepts_existing_drf_tokens(self):
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {token.key}",
+        )
+
+        response = self.client.get("/api/statuses/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_logout_deletes_token_and_invalidates_access(self):
         token = Token.objects.create(user=self.user)
         self.client.credentials(
@@ -148,7 +164,7 @@ class AuthenticationApiTests(APITestCase):
                 "name": "Authorization",
                 "description": (
                     "Enter the token value only. Swagger UI adds the required "
-                    "`Token ` prefix to the Authorization header."
+                    "`Bearer ` prefix to the Authorization header."
                 ),
             },
         )
@@ -161,6 +177,7 @@ class AuthenticationApiTests(APITestCase):
         login = schema["paths"]["/api/auth/login/"]["post"]
         logout = schema["paths"]["/api/auth/logout/"]["post"]
         request_create = schema["paths"]["/api/requests/"]["post"]
+        request_list = schema["paths"]["/api/requests/"]["get"]
         request_status_update = schema["paths"]["/api/requests/{id}/"]["patch"]
         statuses = schema["paths"]["/api/statuses/"]["get"]
         self.assertEqual(
@@ -187,6 +204,15 @@ class AuthenticationApiTests(APITestCase):
                 "schema"
             ]["$ref"],
             "#/components/schemas/Request",
+        )
+        self.assertEqual(
+            request_list["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ],
+            {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Request"},
+            },
         )
         self.assertEqual(
             request_status_update["requestBody"]["content"]["application/json"][
@@ -218,6 +244,7 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(set(login["responses"]), {"200"})
         self.assertEqual(set(logout["responses"]), {"200"})
         self.assertEqual(set(request_create["responses"]), {"201"})
+        self.assertEqual(set(request_list["responses"]), {"200"})
         self.assertEqual(set(statuses["responses"]), {"200"})
         for path, path_item in schema["paths"].items():
             for method, operation in path_item.items():
@@ -331,6 +358,57 @@ class HealthCheckTests(APITestCase):
 
 
 class RequestCreationApiTests(AuthenticatedAPITestCase):
+    def test_list_requests_returns_nested_status_and_only_recent_requests(self):
+        recent_request = Request.objects.create(
+            title="Recent request",
+            description="Created this week.",
+            status=Status.objects.get(tag="in_review"),
+        )
+        old_request = Request.objects.create(
+            title="Old request",
+            description="Created earlier.",
+            status=Status.objects.get(tag="created"),
+        )
+        Request.objects.filter(pk=old_request.pk).update(
+            created_at=timezone.now() - timedelta(days=10),
+        )
+
+        response = self.client.get("/api/requests/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], recent_request.pk)
+        self.assertEqual(
+            response.data[0]["status"],
+            {"tag": "in_review", "name": recent_request.status.name},
+        )
+
+    def test_list_requests_can_filter_by_date_range(self):
+        requested = Request.objects.create(
+            title="Filtered request",
+            description="Inside requested date range.",
+            status=Status.objects.get(tag="created"),
+        )
+        requested_date = timezone.localdate()
+        response = self.client.get(
+            "/api/requests/",
+            {
+                "start_date": requested_date.isoformat(),
+                "end_date": requested_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [requested.pk])
+
+    def test_list_requests_rejects_invalid_date_range(self):
+        response = self.client.get(
+            "/api/requests/",
+            {"start_date": "not-a-date"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_create_request_returns_created_request(self):
         response = self.client.post(
             "/api/requests/",
@@ -351,7 +429,10 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
             response.data["description"],
             "Review the submitted application.",
         )
-        self.assertEqual(response.data["status"], "created")
+        self.assertEqual(
+            response.data["status"],
+            {"tag": "created", "name": request.status.name},
+        )
         self.assertEqual(request.status.tag, "created")
         self.assertEqual(
             request.status_id,
@@ -379,7 +460,13 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
                 )
 
                 self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                self.assertEqual(response.data["status"], "created")
+                self.assertEqual(
+                    response.data["status"],
+                    {
+                        "tag": "created",
+                        "name": Status.objects.get(tag="created").name,
+                    },
+                )
 
     def test_used_status_cannot_be_deleted(self):
         request = Request.objects.create(
@@ -428,7 +515,13 @@ class RequestStatusUpdateApiTests(AuthenticatedAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "in_review")
+        self.assertEqual(
+            response.data["status"],
+            {
+                "tag": "in_review",
+                "name": Status.objects.get(tag="in_review").name,
+            },
+        )
         self.request.refresh_from_db()
         self.assertEqual(self.request.status.tag, "in_review")
         self.assertEqual(self.request.title, "Review application")

@@ -104,7 +104,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "api.authentication.TokenOrBearerAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -115,9 +115,9 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Mood Hunter API",
     "DESCRIPTION": (
         "API REST para la gestión y seguimiento de solicitudes. Los endpoints "
-        "protegidos utilizan DRF TokenAuthentication: envía el encabezado "
-        "`Authorization: Token <token>`. En Swagger UI, usa **Authorize** y "
-        "escribe solo el valor del token; Swagger UI añade el prefijo `Token`."
+        "protegidos utilizan tokens DRF: envía el encabezado "
+        "`Authorization: Bearer <token>` o `Authorization: Token <token>`. "
+        "En Swagger UI, usa **Authorize** y escribe solo el valor del token."
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -131,10 +131,10 @@ SPECTACULAR_SETTINGS = {
                 authorize: (original) => (payload) => {
                   const auth = payload.tokenAuth;
                   if (auth && typeof auth.value === "string") {
-                    const value = auth.value.replace(/^Token\\s+/i, "");
+                    const value = auth.value.replace(/^(Token|Bearer)\\s+/i, "");
                     payload = {
                       ...payload,
-                      tokenAuth: { ...auth, value: `Token ${value}` }
+                      tokenAuth: { ...auth, value: `Bearer ${value}` }
                     };
                   }
                   return original(payload);

@@ -19,11 +19,15 @@ class RequestCreateSerializer(serializers.ModelSerializer):
         return Request.objects.create(status=created_status, **validated_data)
 
 
+class RequestStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Status
+        fields = ["tag", "name"]
+        read_only_fields = fields
+
+
 class RequestSerializer(serializers.ModelSerializer):
-    status = serializers.SlugRelatedField(
-        read_only=True,
-        slug_field="tag",
-    )
+    status = RequestStatusSerializer(read_only=True)
 
     class Meta:
         model = Request

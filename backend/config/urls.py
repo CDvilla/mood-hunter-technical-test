@@ -5,7 +5,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from api.views import (
-    RequestCreateView,
+    RequestListCreateView,
     RequestStatusUpdateView,
     RequestSummaryView,
     StatusListView,
@@ -19,7 +19,11 @@ urlpatterns = [
     path("api/health/", health_check, name="health-check"),
     path("api/auth/login/", TokenLoginView.as_view(), name="token-login"),
     path("api/auth/logout/", TokenLogoutView.as_view(), name="token-logout"),
-    path("api/requests/", RequestCreateView.as_view(), name="request-create"),
+    path(
+        "api/requests/",
+        RequestListCreateView.as_view(),
+        name="request-list-create",
+    ),
     path(
         "api/requests/summary/",
         RequestSummaryView.as_view(),
