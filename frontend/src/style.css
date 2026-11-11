@@ -216,17 +216,32 @@ h1 {
 
 .summary-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
-.summary-controls select {
+.summary-date-field {
+  display: grid;
+  gap: 6px;
+  color: #344057;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.summary-date-field input {
   min-height: 42px;
-  padding: 8px 32px 8px 12px;
+  padding: 8px 10px;
   border: 1px solid #cbd3e1;
   border-radius: 8px;
   background: #fff;
   color: #172033;
+}
+
+.summary-date-error {
+  margin: 14px 0 0;
+  color: #a32b39;
+  font-size: 0.9rem;
 }
 
 .primary-button,
@@ -745,7 +760,8 @@ h1 {
     width: 100%;
   }
 
-  .summary-controls select,
+  .summary-date-field,
+  .summary-date-field input,
   .summary-controls button {
     flex: 1 1 0;
   }

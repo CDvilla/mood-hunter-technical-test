@@ -33,17 +33,6 @@ const NEXT_STATUSES = {
   done: [],
 };
 
-function getDateRange(range) {
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - (range === "month" ? 30 : 7));
-
-  return {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  };
-}
-
 function getPageFromLink(link) {
   if (!link) {
     return null;
@@ -132,10 +121,14 @@ export default function Dashboard({ onLogout }) {
   const [filterDraft, setFilterDraft] = useState(filters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [summaryRange, setSummaryRange] = useState("week");
+  const [summaryDateRange, setSummaryDateRange] = useState({
+    start_date: "",
+    end_date: "",
+  });
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState("");
+  const [summaryDateError, setSummaryDateError] = useState("");
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [summaryCanExpand, setSummaryCanExpand] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -209,7 +202,6 @@ export default function Dashboard({ onLogout }) {
     async function loadInitialSummary() {
       try {
         const data = await getRequestSummary({
-          ...getDateRange("week"),
           signal: controller.signal,
         });
 
@@ -245,11 +237,25 @@ export default function Dashboard({ onLogout }) {
   }, [summary, summaryError, summaryLoading]);
 
   async function handleGenerateSummary() {
+    const { start_date: startDate, end_date: endDate } = summaryDateRange;
+    if (Boolean(startDate) !== Boolean(endDate)) {
+      setSummaryDateError("Selecciona ambas fechas para definir el período.");
+      return;
+    }
+    if (startDate && startDate > endDate) {
+      setSummaryDateError("La fecha inicial debe ser anterior a la fecha final.");
+      return;
+    }
+
+    setSummaryDateError("");
     setSummaryLoading(true);
     setSummaryError("");
 
     try {
-      const data = await getRequestSummary(getDateRange(summaryRange));
+      const data = await getRequestSummary({
+        startDate,
+        endDate,
+      });
 
       if (data?.success === false) {
         throw new Error(data.message || getSummaryUnavailableMessage());
@@ -355,17 +361,36 @@ export default function Dashboard({ onLogout }) {
               <h2 id="summary-title">Resumen con IA</h2>
             </div>
             <div className="summary-controls">
-              <label className="visually-hidden" htmlFor="summary-range">
-                Rango del resumen
-              </label>
-              <select
-                id="summary-range"
-                value={summaryRange}
-                onChange={(event) => setSummaryRange(event.target.value)}
-              >
-                <option value="week">Última semana</option>
-                <option value="month">Últimos 30 días</option>
-              </select>
+              <div className="summary-date-field">
+                <label htmlFor="summary-start-date">Desde</label>
+                <input
+                  id="summary-start-date"
+                  type="date"
+                  value={summaryDateRange.start_date}
+                  onChange={(event) => {
+                    setSummaryDateRange((current) => ({
+                      ...current,
+                      start_date: event.target.value,
+                    }));
+                    setSummaryDateError("");
+                  }}
+                />
+              </div>
+              <div className="summary-date-field">
+                <label htmlFor="summary-end-date">Hasta</label>
+                <input
+                  id="summary-end-date"
+                  type="date"
+                  value={summaryDateRange.end_date}
+                  onChange={(event) => {
+                    setSummaryDateRange((current) => ({
+                      ...current,
+                      end_date: event.target.value,
+                    }));
+                    setSummaryDateError("");
+                  }}
+                />
+              </div>
               <button
                 className="primary-button"
                 type="button"
@@ -376,6 +401,11 @@ export default function Dashboard({ onLogout }) {
               </button>
             </div>
           </div>
+          {summaryDateError && (
+            <p className="summary-date-error" role="alert">
+              {summaryDateError}
+            </p>
+          )}
 
           <div className="summary-content" aria-live="polite">
             {summaryLoading ? (

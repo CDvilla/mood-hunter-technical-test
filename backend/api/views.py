@@ -210,21 +210,64 @@ class RequestStatusUpdateView(GenericAPIView):
         return Response(response_serializer.data)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            "start_date",
+            str,
+            OpenApiParameter.QUERY,
+            required=False,
+            description="Inclusive start date; use with end_date.",
+        ),
+        OpenApiParameter(
+            "end_date",
+            str,
+            OpenApiParameter.QUERY,
+            required=False,
+            description="Inclusive end date; use with start_date.",
+        ),
+    ],
+)
 class RequestSummaryView(GenericAPIView):
     serializer_class = RequestSummarySerializer
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        start_date = request.GET.get("start_date")
-        end_date = request.GET.get("end_date")
+        start_value = request.query_params.get("start_date", "").strip()
+        end_value = request.query_params.get("end_date", "").strip()
 
         queryset = Request.objects.select_related("status").all()
 
-        if start_date and end_date:
-            queryset = queryset.filter(created_at__range=[start_date, end_date])
+        if not start_value and not end_value:
+            now = timezone.now()
+            queryset = queryset.filter(
+                created_at__range=(now - timedelta(days=7), now)
+            )
+        elif not start_value or not end_value:
+            raise ValidationError(
+                {"date": "Provide both start_date and end_date for a custom range."}
+            )
         else:
-            one_week_ago = timezone.now() - timedelta(days=7)
-            queryset = queryset.filter(created_at__gte=one_week_ago)
+            try:
+                start_date = datetime.fromisoformat(
+                    start_value.replace("Z", "+00:00")
+                ).date()
+                end_date = datetime.fromisoformat(
+                    end_value.replace("Z", "+00:00")
+                ).date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"date": "Use ISO date or datetime values for the date range."}
+                ) from exc
+
+            if start_date > end_date:
+                raise ValidationError(
+                    {"date": "start_date must be earlier than or equal to end_date."}
+                )
+
+            queryset = queryset.filter(
+                created_at__date__range=(start_date, end_date)
+            )
 
         recent_requests = list(
             queryset.order_by("-created_at")

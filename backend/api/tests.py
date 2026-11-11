@@ -21,6 +21,7 @@ from api.domain import (
     InvalidRequestStatusTransition,
     validate_request_status_transition,
 )
+from api.gemini_summary import summarize_requests
 from api.models import Request, Status
 from api.serializers import RequestSerializer
 
@@ -551,6 +552,106 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
                 )
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertEqual(Request.objects.count(), 0)
+
+
+class RequestSummaryApiTests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.created_status = Status.objects.get(tag="created")
+
+    def create_request(self, title, created_at):
+        request = Request.objects.create(
+            title=title,
+            description="Summary date range test.",
+            status=self.created_status,
+        )
+        Request.objects.filter(pk=request.pk).update(created_at=created_at)
+        return request
+
+    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    def test_summary_defaults_to_the_last_seven_days(self, summarize):
+        now = timezone.now()
+        recent = self.create_request("Recent request", now - timedelta(days=3))
+        self.create_request("Old request", now - timedelta(days=9))
+        self.create_request("Future request", now + timedelta(days=1))
+
+        response = self.client.get("/api/requests/summary/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["summary"], "Resumen de prueba")
+        self.assertEqual(response.data["request_count"], 1)
+        self.assertEqual(
+            [item["title"] for item in summarize.call_args.args[0]],
+            [recent.title],
+        )
+
+    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    def test_blank_dates_use_the_default_seven_day_range(self, summarize):
+        now = timezone.now()
+        recent = self.create_request("Recent request", now - timedelta(days=3))
+        self.create_request("Old request", now - timedelta(days=9))
+
+        response = self.client.get(
+            "/api/requests/summary/",
+            {"start_date": "", "end_date": ""},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["title"] for item in summarize.call_args.args[0]],
+            [recent.title],
+        )
+
+    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    def test_summary_uses_custom_inclusive_date_range(self, summarize):
+        now = timezone.now()
+        first_date = (now - timedelta(days=3)).date()
+        last_date = (now - timedelta(days=2)).date()
+        first = self.create_request("First date request", now - timedelta(days=3))
+        last = self.create_request("Last date request", now - timedelta(days=2))
+        self.create_request("Before range request", now - timedelta(days=5))
+        self.create_request("After range request", now - timedelta(days=1))
+
+        response = self.client.get(
+            "/api/requests/summary/",
+            {
+                "start_date": first_date.isoformat(),
+                "end_date": last_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["title"] for item in summarize.call_args.args[0]},
+            {first.title, last.title},
+        )
+
+    def test_summary_rejects_partial_or_invalid_date_ranges(self):
+        for params in (
+            {"start_date": "2026-01-01"},
+            {"start_date": "not-a-date", "end_date": "2026-01-02"},
+            {"start_date": "2026-01-03", "end_date": "2026-01-02"},
+        ):
+            with self.subTest(params=params):
+                response = self.client.get("/api/requests/summary/", params)
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+
+class GeminiSummaryTests(SimpleTestCase):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("api.gemini_summary.httpx.Client")
+    def test_summary_removes_asterisks_from_provider_response(self, client_class):
+        response = client_class.return_value.__enter__.return_value.post.return_value
+        response.json.return_value = {
+            "candidates": [
+                {"content": {"parts": [{"text": "**Resumen** de prueba"}]}}
+            ]
+        }
+
+        self.assertEqual(summarize_requests([]), "Resumen de prueba")
 
 
 class RequestStatusUpdateApiTests(AuthenticatedAPITestCase):

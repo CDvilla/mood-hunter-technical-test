@@ -46,11 +46,20 @@ export function createRequest({ title, description }, { signal } = {}) {
   });
 }
 
-export async function getRequestSummary({ startDate, endDate, signal }) {
-  const params = new URLSearchParams({
-    start_date: startDate,
-    end_date: endDate,
-  });
+export async function getRequestSummary({
+  startDate = "",
+  endDate = "",
+  signal,
+} = {}) {
+  const params = new URLSearchParams();
+  if (startDate) {
+    params.set("start_date", startDate);
+  }
+  if (endDate) {
+    params.set("end_date", endDate);
+  }
+  const queryString = params.toString();
+  const query = queryString ? `?${queryString}` : "";
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20_000);
   const abortFromCaller = () => controller.abort();
@@ -58,7 +67,7 @@ export async function getRequestSummary({ startDate, endDate, signal }) {
   signal?.addEventListener("abort", abortFromCaller, { once: true });
 
   try {
-    return await authenticatedFetch(`/requests/summary/?${params}`, {
+    return await authenticatedFetch(`/requests/summary/${query}`, {
       signal: controller.signal,
     });
   } finally {
