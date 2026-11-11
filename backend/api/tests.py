@@ -142,6 +142,10 @@ class AuthenticationApiTests(APITestCase):
                 ),
             },
         )
+        self.assertNotIn("TokenLoginError", schema["components"]["schemas"])
+        self.assertNotIn("AuthenticationError", schema["components"]["schemas"])
+        self.assertNotIn("RequestValidationError", schema["components"]["schemas"])
+        self.assertNotIn("/api/schema/", schema["paths"])
         self.assertIn("/api/auth/login/", schema["paths"])
         self.assertIn("/api/auth/logout/", schema["paths"])
         login = schema["paths"]["/api/auth/login/"]["post"]
@@ -152,12 +156,26 @@ class AuthenticationApiTests(APITestCase):
             login["requestBody"]["content"]["application/json"]["schema"]["$ref"],
             "#/components/schemas/TokenLogin",
         )
+        self.assertEqual(
+            login["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/Token",
+        )
         self.assertNotIn("requestBody", logout)
+        self.assertEqual(
+            logout["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/LogoutResponse",
+        )
         self.assertEqual(
             request_create["requestBody"]["content"]["application/json"]["schema"][
                 "$ref"
             ],
             "#/components/schemas/RequestCreate",
+        )
+        self.assertEqual(
+            request_create["responses"]["201"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/Request",
         )
         self.assertEqual(
             statuses["responses"]["200"]["content"]["application/json"]["schema"],
@@ -166,13 +184,10 @@ class AuthenticationApiTests(APITestCase):
                 "items": {"$ref": "#/components/schemas/Status"},
             },
         )
-        self.assertEqual(
-            set(login["responses"]),
-            {"200", "400"},
-        )
-        self.assertEqual(set(logout["responses"]), {"200", "401"})
-        self.assertEqual(set(request_create["responses"]), {"201", "400", "401"})
-        self.assertEqual(set(statuses["responses"]), {"200", "401"})
+        self.assertEqual(set(login["responses"]), {"200"})
+        self.assertEqual(set(logout["responses"]), {"200"})
+        self.assertEqual(set(request_create["responses"]), {"201"})
+        self.assertEqual(set(statuses["responses"]), {"200"})
         for path, path_item in schema["paths"].items():
             for method, operation in path_item.items():
                 if method not in {"get", "post", "put", "patch", "delete"}:
@@ -181,7 +196,6 @@ class AuthenticationApiTests(APITestCase):
                 with self.subTest(path=path, method=method):
                     if (path, method) in {
                         ("/api/auth/login/", "post"),
-                        ("/api/schema/", "get"),
                     }:
                         self.assertFalse(any(operation.get("security", [])))
                     else:

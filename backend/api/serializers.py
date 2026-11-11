@@ -56,28 +56,3 @@ class TokenSerializer(serializers.Serializer):
 
 class LogoutResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
-
-
-class TokenLoginErrorSerializer(serializers.Serializer):
-    non_field_errors = serializers.ListField(
-        child=serializers.CharField(),
-    )
-
-
-class AuthenticationErrorSerializer(serializers.Serializer):
-    detail = serializers.CharField()
-
-
-class RequestValidationErrorSerializer(serializers.Serializer):
-    title = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-    )
-    description = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-    )
-    non_field_errors = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-    )

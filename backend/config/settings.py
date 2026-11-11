@@ -120,6 +120,7 @@ SPECTACULAR_SETTINGS = {
         "escribe solo el valor del token; Swagger UI añade el prefijo `Token`."
     ),
     "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
     "SWAGGER_UI_SETTINGS": """{
       "persistAuthorization": true,
       "plugins": [
