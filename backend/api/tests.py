@@ -568,7 +568,7 @@ class RequestSummaryApiTests(AuthenticatedAPITestCase):
         Request.objects.filter(pk=request.pk).update(created_at=created_at)
         return request
 
-    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    @patch("api.views.summarize_requests", return_value="Test summary")
     def test_summary_defaults_to_the_last_seven_days(self, summarize):
         now = timezone.now()
         recent = self.create_request("Recent request", now - timedelta(days=3))
@@ -578,14 +578,14 @@ class RequestSummaryApiTests(AuthenticatedAPITestCase):
         response = self.client.get("/api/requests/summary/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["summary"], "Resumen de prueba")
+        self.assertEqual(response.data["summary"], "Test summary")
         self.assertEqual(response.data["request_count"], 1)
         self.assertEqual(
             [item["title"] for item in summarize.call_args.args[0]],
             [recent.title],
         )
 
-    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    @patch("api.views.summarize_requests", return_value="Test summary")
     def test_blank_dates_use_the_default_seven_day_range(self, summarize):
         now = timezone.now()
         recent = self.create_request("Recent request", now - timedelta(days=3))
@@ -602,7 +602,7 @@ class RequestSummaryApiTests(AuthenticatedAPITestCase):
             [recent.title],
         )
 
-    @patch("api.views.summarize_requests", return_value="Resumen de prueba")
+    @patch("api.views.summarize_requests", return_value="Test summary")
     def test_summary_uses_custom_inclusive_date_range(self, summarize):
         now = timezone.now()
         first_date = (now - timedelta(days=3)).date()
@@ -647,11 +647,11 @@ class GeminiSummaryTests(SimpleTestCase):
         response = client_class.return_value.__enter__.return_value.post.return_value
         response.json.return_value = {
             "candidates": [
-                {"content": {"parts": [{"text": "**Resumen** de prueba"}]}}
+                {"content": {"parts": [{"text": "**Test** summary"}]}}
             ]
         }
 
-        self.assertEqual(summarize_requests([]), "Resumen de prueba")
+        self.assertEqual(summarize_requests([]), "Test summary")
 
 
 class RequestStatusUpdateApiTests(AuthenticatedAPITestCase):
