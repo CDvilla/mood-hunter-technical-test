@@ -101,7 +101,7 @@ function getSummaryUnavailableMessage() {
   return "El servicio de resumen con IA no está disponible temporalmente. Puedes seguir usando el listado de solicitudes.";
 }
 
-export default function Dashboard({ onLogout }) {
+export default function Dashboard() {
   const [requestPage, setRequestPage] = useState({
     count: 0,
     next: null,
@@ -349,9 +349,6 @@ export default function Dashboard({ onLogout }) {
               Revisa el resumen reciente y administra el estado de cada solicitud.
             </p>
           </div>
-          <button className="logout-button" type="button" onClick={onLogout}>
-            Cerrar Sesión
-          </button>
         </header>
 
         <section className="summary-card" aria-labelledby="summary-title">
