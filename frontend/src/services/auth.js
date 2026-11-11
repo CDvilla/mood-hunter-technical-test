@@ -35,7 +35,7 @@ export async function logout() {
     if (token) {
       await apiFetch("/auth/logout/", {
         method: "POST",
-        headers: { Authorization: `Token ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
     }
   } finally {

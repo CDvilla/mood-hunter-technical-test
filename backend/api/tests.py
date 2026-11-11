@@ -208,11 +208,8 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(
             request_list["responses"]["200"]["content"]["application/json"][
                 "schema"
-            ],
-            {
-                "type": "array",
-                "items": {"$ref": "#/components/schemas/Request"},
-            },
+            ]["$ref"],
+            "#/components/schemas/PaginatedRequestList",
         )
         self.assertEqual(
             request_status_update["requestBody"]["content"]["application/json"][
@@ -376,10 +373,11 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
         response = self.client.get("/api/requests/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["id"], recent_request.pk)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], recent_request.pk)
         self.assertEqual(
-            response.data[0]["status"],
+            response.data["results"][0]["status"],
             {"tag": "in_review", "name": recent_request.status.name},
         )
 
@@ -399,7 +397,64 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([item["id"] for item in response.data], [requested.pk])
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [requested.pk],
+        )
+
+    def test_list_requests_supports_search_and_status_filters_together(self):
+        matching = Request.objects.create(
+            title="Blue bicycle review",
+            description="Needs inspection.",
+            status=Status.objects.get(tag="in_review"),
+        )
+        Request.objects.create(
+            title="Blue bicycle completed",
+            description="Already done.",
+            status=Status.objects.get(tag="done"),
+        )
+        Request.objects.create(
+            title="Different item",
+            description="Blue bicycle appears in its description.",
+            status=Status.objects.get(tag="in_review"),
+        )
+
+        response = self.client.get(
+            "/api/requests/",
+            {"search": "BLUE BICYCLE", "status": "in_review"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], matching.pk)
+
+    def test_list_requests_defaults_to_ten_and_accepts_page_size(self):
+        status_obj = Status.objects.get(tag="created")
+        Request.objects.bulk_create(
+            [
+                Request(
+                    title=f"Request {index}",
+                    description="Page-size test.",
+                    status=status_obj,
+                )
+                for index in range(12)
+            ]
+        )
+
+        first_page = self.client.get("/api/requests/")
+        custom_page = self.client.get(
+            "/api/requests/",
+            {"page": 2, "page_size": 4},
+        )
+
+        self.assertEqual(first_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_page.data["count"], 12)
+        self.assertEqual(len(first_page.data["results"]), 10)
+        self.assertIsNotNone(first_page.data["next"])
+        self.assertIsNone(first_page.data["previous"])
+        self.assertEqual(custom_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(custom_page.data["results"]), 4)
+        self.assertIsNotNone(custom_page.data["previous"])
 
     def test_list_requests_rejects_invalid_date_range(self):
         response = self.client.get(

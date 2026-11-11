@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
-from django.utils import timezone
+from django.db.models import Q
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -13,6 +14,7 @@ from rest_framework.views import APIView
 
 from api.gemini_summary import GeminiSummaryUnavailable, summarize_requests
 from api.models import Request, Status
+from api.pagination import RequestPagination
 from api.serializers import (
     LogoutResponseSerializer,
     RequestCreateSerializer,
@@ -70,6 +72,24 @@ class TokenLogoutView(APIView):
                 OpenApiParameter.QUERY,
                 description="Inclusive ISO date/datetime filter.",
             ),
+            OpenApiParameter(
+                "search",
+                str,
+                OpenApiParameter.QUERY,
+                description="Case-insensitive search in title and description.",
+            ),
+            OpenApiParameter(
+                "q",
+                str,
+                OpenApiParameter.QUERY,
+                description="Alias for search.",
+            ),
+            OpenApiParameter(
+                "status",
+                str,
+                OpenApiParameter.QUERY,
+                description="Filter by status tag.",
+            ),
         ],
     ),
     post=extend_schema(
@@ -80,6 +100,7 @@ class TokenLogoutView(APIView):
 class RequestListCreateView(ListCreateAPIView):
     queryset = Request.objects.select_related("status").all()
     serializer_class = RequestSerializer
+    pagination_class = RequestPagination
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -92,32 +113,61 @@ class RequestListCreateView(ListCreateAPIView):
 
         if not start_value and not end_value:
             now = timezone.now()
-            return queryset.filter(
+            queryset = queryset.filter(
                 created_at__range=(now - timedelta(days=7), now)
             )
+        else:
+            try:
+                end_date = (
+                    datetime.fromisoformat(end_value.replace("Z", "+00:00")).date()
+                    if end_value
+                    else today
+                )
+                start_date = (
+                    datetime.fromisoformat(start_value.replace("Z", "+00:00")).date()
+                    if start_value
+                    else end_date - timedelta(days=7)
+                )
+            except ValueError as exc:
+                raise ValidationError(
+                    {
+                        "date": (
+                            "Use ISO date or datetime values for start_date and "
+                            "end_date."
+                        )
+                    }
+                ) from exc
 
-        try:
-            end_date = (
-                datetime.fromisoformat(end_value.replace("Z", "+00:00")).date()
-                if end_value
-                else today
-            )
-            start_date = (
-                datetime.fromisoformat(start_value.replace("Z", "+00:00")).date()
-                if start_value
-                else end_date - timedelta(days=7)
-            )
-        except ValueError as exc:
-            raise ValidationError(
-                {"date": "Use ISO date or datetime values for start_date and end_date."}
-            ) from exc
+            if start_date > end_date:
+                raise ValidationError(
+                    {"date": "start_date must be earlier than or equal to end_date."}
+                )
 
-        if start_date > end_date:
-            raise ValidationError(
-                {"date": "start_date must be earlier than or equal to end_date."}
+            queryset = queryset.filter(
+                created_at__date__range=(start_date, end_date)
             )
 
-        return queryset.filter(created_at__date__range=(start_date, end_date))
+        search_term = (
+            self.request.query_params.get("search")
+            or self.request.query_params.get("q")
+            or ""
+        ).strip()
+        if search_term:
+            queryset = queryset.filter(
+                Q(title__icontains=search_term)
+                | Q(description__icontains=search_term)
+            )
+
+        status_tag = self.request.query_params.get("status", "").strip()
+        if status_tag:
+            request_status = Status.objects.filter(tag=status_tag).first()
+            queryset = (
+                queryset.filter(status=request_status)
+                if request_status
+                else queryset.none()
+            )
+
+        return queryset
 
     def create(self, request, *args, **kwargs):
         input_serializer = self.get_serializer(data=request.data)

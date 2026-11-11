@@ -59,6 +59,7 @@ Compose espera a que el health check de MySQL termine antes de iniciar Django. D
 - Backend: <http://localhost:8000>
 - Health check: <http://localhost:8000/api/health/>
 - API browsable existente: <http://localhost:8000/api/>
+- Listar solicitudes: `GET http://localhost:8000/api/requests/`
 - Crear solicitud: `POST http://localhost:8000/api/requests/`
 - Consultar estados: `GET http://localhost:8000/api/statuses/`
 - Iniciar sesión: `POST http://localhost:8000/api/auth/login/`
@@ -69,7 +70,7 @@ Compose espera a que el health check de MySQL termine antes de iniciar Django. D
 
 El esquema OpenAPI y Swagger UI permiten consultar y probar la API cuando Docker Compose está ejecutándose.
 
-`POST /api/requests/` recibe únicamente `title` y `description`; el backend busca y asigna automáticamente el estado cuyo `tag` es `created`. Internamente, `Request` se relaciona con `Status` mediante su clave primaria numérica; la API identifica el estado únicamente por su `tag` y no expone el ID interno. `GET /api/statuses/` devuelve cada estado con `tag` y `name`; el catálogo se administra mediante migraciones y no ofrece operaciones de escritura por API.
+`GET /api/requests/` devuelve una página de hasta 10 resultados con `count`, `next`, `previous` y `results`. Se puede navegar con `page`, cambiar el tamaño con `page_size` (máximo 100), buscar en título y descripción con `search` (o `q`), filtrar por `status` usando su `tag` y filtrar fechas con `start_date`/`end_date`. Si se omiten ambas fechas, se muestran las solicitudes de los últimos siete días. Cada resultado contiene el estado como objeto `{ "tag": "...", "name": "..." }`. `POST /api/requests/` recibe únicamente `title` y `description`; el backend busca y asigna automáticamente el estado cuyo `tag` es `created`. Internamente, `Request` se relaciona con `Status` mediante su clave primaria numérica; la API no expone ese ID interno. `GET /api/statuses/` devuelve cada estado con `tag` y `name`; el catálogo se administra mediante migraciones y no ofrece operaciones de escritura por API.
 
 La respuesta del catálogo tiene esta estructura:
 
@@ -93,21 +94,21 @@ curl -X POST http://localhost:8000/api/auth/login/ \
   -d '{"username":"TU_USUARIO_ADMIN","password":"TU_CONTRASEÑA"}'
 ```
 
-La respuesta contiene `{"token":"..."}`. En las siguientes peticiones, incluye el token como `Authorization: Token <token>`. Por ejemplo:
+La respuesta contiene `{"token":"..."}`. En las siguientes peticiones, incluye el token como `Authorization: Bearer <token>` o `Authorization: Token <token>`. Por ejemplo:
 
 ```bash
 curl http://localhost:8000/api/statuses/ \
-  -H 'Authorization: Token TU_TOKEN'
+  -H 'Authorization: Bearer TU_TOKEN'
 ```
 
 Para invalidar el token actual:
 
 ```bash
 curl -X POST http://localhost:8000/api/auth/logout/ \
-  -H 'Authorization: Token TU_TOKEN'
+  -H 'Authorization: Bearer TU_TOKEN'
 ```
 
-Swagger UI en `/api/docs/` ofrece el botón **Authorize** para introducir únicamente el valor del token; Swagger añade el prefijo `Token` al encabezado `Authorization`. El health check, el esquema OpenAPI y Swagger UI permanecen públicos; los endpoints de negocio requieren token.
+Swagger UI en `/api/docs/` ofrece el botón **Authorize** para introducir únicamente el valor del token; Swagger añade el prefijo `Bearer` al encabezado `Authorization`. El health check, el esquema OpenAPI y Swagger UI permanecen públicos; los endpoints de negocio requieren token.
 
 La URL que usa el navegador para la API se configura con `VITE_API_BASE_URL`. Los orígenes del frontend permitidos por el backend se configuran con `CORS_ALLOWED_ORIGINS`.
 

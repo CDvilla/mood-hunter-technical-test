@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../services/api.js";
 import {
   getRequestSummary,
   getRequests,
+  getStatuses,
   updateRequestStatus,
 } from "../services/requests.js";
 
@@ -42,6 +43,47 @@ function getDateRange(range) {
   };
 }
 
+function getPageFromLink(link) {
+  if (!link) {
+    return null;
+  }
+
+  try {
+    const url = new URL(link, window.location.origin);
+    const page = Number(url.searchParams.get("page"));
+    return Number.isInteger(page) && page > 0 ? page : 1;
+  } catch {
+    return null;
+  }
+}
+
+function getPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([
+    1,
+    totalPages,
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+  ]);
+  const sortedPages = [...pages]
+    .filter((page) => page > 0 && page <= totalPages)
+    .sort((a, b) => a - b);
+  const items = [];
+
+  sortedPages.forEach((page, index) => {
+    if (index > 0 && page - sortedPages[index - 1] > 1) {
+      items.push(`ellipsis-${page}`);
+    }
+    items.push(page);
+  });
+
+  return items;
+}
+
 function formatDate(value) {
   const date = new Date(value);
 
@@ -70,26 +112,54 @@ function getSummaryUnavailableMessage() {
 }
 
 export default function Dashboard({ onLogout }) {
-  const [requests, setRequests] = useState([]);
+  const [requestPage, setRequestPage] = useState({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState("");
+  const [statuses, setStatuses] = useState([]);
+  const [statusesError, setStatusesError] = useState("");
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "",
+    start_date: "",
+    end_date: "",
+  });
+  const [filterDraft, setFilterDraft] = useState(filters);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [summaryRange, setSummaryRange] = useState("week");
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState("");
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [summaryCanExpand, setSummaryCanExpand] = useState(false);
   const [actionError, setActionError] = useState("");
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
+  const summaryTextRef = useRef(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadRequests() {
+      setRequestsLoading(true);
+      setRequestsError("");
+
       try {
-        const data = await getRequests({ signal: controller.signal });
-        if (!Array.isArray(data)) {
+        const data = await getRequests({
+          filters,
+          page,
+          pageSize,
+          signal: controller.signal,
+        });
+        if (!Array.isArray(data?.results) || typeof data?.count !== "number") {
           throw new Error("El servidor devolvió un listado no válido.");
         }
-        setRequests(data);
+
+        setRequestPage(data);
       } catch (error) {
         if (!controller.signal.aborted) {
           setRequestsError(
@@ -104,6 +174,34 @@ export default function Dashboard({ onLogout }) {
         }
       }
     }
+
+    loadRequests();
+    return () => controller.abort();
+  }, [filters, page, pageSize]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadStatuses() {
+      try {
+        const data = await getStatuses({ signal: controller.signal });
+        if (!Array.isArray(data)) {
+          throw new Error("El servidor devolvió un catálogo de estados no válido.");
+        }
+        setStatuses(data);
+      } catch {
+        if (!controller.signal.aborted) {
+          setStatusesError("No se pudieron cargar los estados disponibles.");
+        }
+      }
+    }
+
+    loadStatuses();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
 
     async function loadInitialSummary() {
       try {
@@ -128,11 +226,20 @@ export default function Dashboard({ onLogout }) {
       }
     }
 
-    loadRequests();
     loadInitialSummary();
-
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const summaryText = summaryTextRef.current;
+    setSummaryExpanded(false);
+    setSummaryCanExpand(
+      Boolean(
+        summaryText &&
+          summaryText.scrollHeight > summaryText.clientHeight + 1,
+      ),
+    );
+  }, [summary, summaryError, summaryLoading]);
 
   async function handleGenerateSummary() {
     setSummaryLoading(true);
@@ -159,17 +266,53 @@ export default function Dashboard({ onLogout }) {
 
     try {
       const updatedRequest = await updateRequestStatus(request.id, nextStatus);
-      setRequests((current) =>
-        current.map((item) =>
+      setRequestPage((current) => ({
+        ...current,
+        results: current.results.map((item) =>
           item.id === request.id ? updatedRequest : item,
         ),
-      );
+      }));
     } catch (error) {
       setActionError(getTransitionError(error));
     } finally {
       setUpdatingRequestId(null);
     }
   }
+
+  function applyFilters(event) {
+    event.preventDefault();
+    setFilters(filterDraft);
+    setPage(1);
+  }
+
+  function clearFilters() {
+    const emptyFilters = {
+      search: "",
+      status: "",
+      start_date: "",
+      end_date: "",
+    };
+    setFilterDraft(emptyFilters);
+    setFilters(emptyFilters);
+    setPage(1);
+  }
+
+  function goToPage(nextPage) {
+    if (Number.isInteger(nextPage) && nextPage > 0) {
+      setPage(nextPage);
+    }
+  }
+
+  function goToPageLink(link) {
+    const nextPage = getPageFromLink(link);
+    if (nextPage !== null) {
+      goToPage(nextPage);
+    }
+  }
+
+  const requests = requestPage.results;
+  const totalPages = Math.ceil(requestPage.count / pageSize);
+  const pageNumbers = getPageNumbers(page, totalPages);
 
   return (
     <main className="dashboard-page">
@@ -224,9 +367,24 @@ export default function Dashboard({ onLogout }) {
                 {summaryError}
               </p>
             ) : (
-              <p>{summary || "No hay resumen disponible para este período."}</p>
+              <p
+                ref={summaryTextRef}
+                className={summaryExpanded ? "summary-expanded" : "summary-clamped"}
+              >
+                {summary || "No hay resumen disponible para este período."}
+              </p>
             )}
           </div>
+          {summaryCanExpand && !summaryLoading && !summaryError && (
+            <button
+              className="summary-toggle"
+              type="button"
+              aria-expanded={summaryExpanded}
+              onClick={() => setSummaryExpanded((expanded) => !expanded)}
+            >
+              {summaryExpanded ? "Mostrar menos ↑" : "Leer resumen completo ↓"}
+            </button>
+          )}
         </section>
 
         {actionError && (
@@ -251,9 +409,95 @@ export default function Dashboard({ onLogout }) {
             </div>
             <span className="request-count">
               {requests.length}{" "}
-              {requests.length === 1 ? "solicitud" : "solicitudes"}
+              de {requestPage.count}{" "}
+              {requestPage.count === 1 ? "solicitud" : "solicitudes"}
             </span>
           </div>
+
+          <form className="request-filters" onSubmit={applyFilters}>
+            <div className="filter-field filter-search">
+              <label htmlFor="request-search">Buscar</label>
+              <input
+                id="request-search"
+                type="search"
+                placeholder="Título o descripción"
+                value={filterDraft.search}
+                onChange={(event) =>
+                  setFilterDraft((current) => ({
+                    ...current,
+                    search: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="filter-field">
+              <label htmlFor="request-status">Estado</label>
+              <select
+                id="request-status"
+                value={filterDraft.status}
+                onChange={(event) =>
+                  setFilterDraft((current) => ({
+                    ...current,
+                    status: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Todos los estados</option>
+                {statuses.map((status) => (
+                  <option value={status.tag} key={status.tag}>
+                    {status.name}
+                  </option>
+                ))}
+              </select>
+              {statusesError && (
+                <span className="filter-hint">{statusesError}</span>
+              )}
+            </div>
+
+            <div className="filter-field">
+              <label htmlFor="request-start-date">Desde</label>
+              <input
+                id="request-start-date"
+                type="date"
+                value={filterDraft.start_date}
+                onChange={(event) =>
+                  setFilterDraft((current) => ({
+                    ...current,
+                    start_date: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="filter-field">
+              <label htmlFor="request-end-date">Hasta</label>
+              <input
+                id="request-end-date"
+                type="date"
+                value={filterDraft.end_date}
+                onChange={(event) =>
+                  setFilterDraft((current) => ({
+                    ...current,
+                    end_date: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="filter-actions">
+              <button className="primary-button" type="submit">
+                Aplicar filtros
+              </button>
+              <button
+                className="filter-reset-button"
+                type="button"
+                onClick={clearFilters}
+              >
+                Limpiar
+              </button>
+            </div>
+          </form>
 
           {requestsLoading ? (
             <p className="muted-message">Cargando solicitudes...</p>
@@ -304,6 +548,63 @@ export default function Dashboard({ onLogout }) {
                 );
               })}
             </div>
+          )}
+
+          {!requestsLoading && !requestsError && totalPages > 0 && (
+            <nav className="pagination" aria-label="Paginación de solicitudes">
+              <button
+                className="page-nav-button"
+                type="button"
+                onClick={() => goToPageLink(requestPage.previous)}
+                disabled={!requestPage.previous}
+              >
+                ← Anterior
+              </button>
+
+              <div className="page-numbers">
+                {pageNumbers.map((pageNumber) =>
+                  typeof pageNumber === "string" ? (
+                    <span className="page-ellipsis" key={pageNumber}>
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      className={`page-number${pageNumber === page ? " is-current" : ""}`}
+                      type="button"
+                      key={pageNumber}
+                      aria-current={pageNumber === page ? "page" : undefined}
+                      onClick={() => goToPage(pageNumber)}
+                    >
+                      {pageNumber}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <button
+                className="page-nav-button"
+                type="button"
+                onClick={() => goToPageLink(requestPage.next)}
+                disabled={!requestPage.next}
+              >
+                Siguiente →
+              </button>
+
+              <label className="page-size-control">
+                Por página
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
+            </nav>
           )}
         </section>
       </div>

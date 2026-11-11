@@ -12,13 +12,30 @@ function authenticatedFetch(path, options = {}) {
     ...options,
     headers: {
       ...options.headers,
-      Authorization: `Token ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export function getRequests({ signal } = {}) {
-  return authenticatedFetch("/requests/", { signal });
+export function getRequests({
+  filters = {},
+  page = 1,
+  pageSize = 10,
+  signal,
+} = {}) {
+  const params = new URLSearchParams({ page, page_size: pageSize });
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  return authenticatedFetch(`/requests/?${params}`, { signal });
+}
+
+export function getStatuses({ signal } = {}) {
+  return authenticatedFetch("/statuses/", { signal });
 }
 
 export async function getRequestSummary({ startDate, endDate, signal }) {
