@@ -70,6 +70,12 @@ class StatusSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RequestSummarySerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    summary = serializers.CharField()
+    request_count = serializers.IntegerField()
+
+
 class TokenLoginSerializer(serializers.Serializer):
     username = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
