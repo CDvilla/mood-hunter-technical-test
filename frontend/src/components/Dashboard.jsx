@@ -133,7 +133,8 @@ export default function Dashboard() {
   const [summaryCanExpand, setSummaryCanExpand] = useState(false);
   const [actionError, setActionError] = useState("");
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestToEdit, setRequestToEdit] = useState(null);
   const [requestsReloadKey, setRequestsReloadKey] = useState(0);
   const summaryTextRef = useRef(null);
 
@@ -288,7 +289,21 @@ export default function Dashboard() {
     }
   }
 
-  function handleRequestCreated() {
+  function handleRequestSaved(savedRequest) {
+    setIsRequestModalOpen(false);
+
+    if (requestToEdit) {
+      setRequestPage((current) => ({
+        ...current,
+        results: current.results.map((item) =>
+          item.id === savedRequest.id ? savedRequest : item,
+        ),
+      }));
+      setRequestToEdit(null);
+      setRequestsReloadKey((current) => current + 1);
+      return;
+    }
+
     const emptyFilters = {
       search: "",
       status: "",
@@ -299,8 +314,18 @@ export default function Dashboard() {
     setFilterDraft(emptyFilters);
     setFilters(emptyFilters);
     setPage(1);
-    setIsCreateModalOpen(false);
+    setRequestToEdit(null);
     setRequestsReloadKey((current) => current + 1);
+  }
+
+  function openCreateModal() {
+    setRequestToEdit(null);
+    setIsRequestModalOpen(true);
+  }
+
+  function openEditModal(request) {
+    setRequestToEdit(request);
+    setIsRequestModalOpen(true);
   }
 
   function applyFilters(event) {
@@ -460,7 +485,7 @@ export default function Dashboard() {
               <button
                 className="primary-button"
                 type="button"
-                onClick={() => setIsCreateModalOpen(true)}
+                onClick={openCreateModal}
               >
                 + Crear solicitud
               </button>
@@ -569,33 +594,50 @@ export default function Dashboard() {
 
                 return (
                   <article className="request-row" key={request.id}>
-                    <div className="request-main">
-                      <h3>{request.title}</h3>
-                      <p className="request-date">
-                        Creada {formatDate(request.created_at)}
-                      </p>
+                    <div className="request-leading">
+                      <div className="request-main">
+                        <h3>{request.title}</h3>
+                        <p className="request-date">
+                          Creada {formatDate(request.created_at)}
+                        </p>
+                      </div>
                     </div>
 
                     <span className={`status-badge status-${statusTag || "unknown"}`}>
                       {statusName}
                     </span>
 
-                    <div className="request-actions">
-                      {(NEXT_STATUSES[statusTag] || []).map((transition) => (
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          key={transition.status}
-                          onClick={() =>
-                            handleStatusChange(request, transition.status)
-                          }
-                          disabled={updatingRequestId !== null}
-                        >
-                          {updatingRequestId === request.id
-                            ? "Guardando..."
-                            : transition.label}
-                        </button>
-                      ))}
+                    <div className="request-trailing">
+                      <div className="request-actions">
+                        {(NEXT_STATUSES[statusTag] || []).map((transition) => (
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            key={transition.status}
+                            onClick={() =>
+                              handleStatusChange(request, transition.status)
+                            }
+                            disabled={updatingRequestId !== null}
+                          >
+                            {updatingRequestId === request.id
+                              ? "Guardando..."
+                              : transition.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        className="edit-request-button"
+                        type="button"
+                        aria-label={`Editar solicitud: ${request.title}`}
+                        title="Editar solicitud"
+                        onClick={() => openEditModal(request)}
+                        disabled={updatingRequestId !== null}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                        </svg>
+                      </button>
                     </div>
                   </article>
                 );
@@ -605,43 +647,43 @@ export default function Dashboard() {
 
           {!requestsLoading && !requestsError && totalPages > 0 && (
             <nav className="pagination" aria-label="Paginación de solicitudes">
-              <button
-                className="page-nav-button"
-                type="button"
-                onClick={() => goToPageLink(requestPage.previous)}
-                disabled={!requestPage.previous}
-              >
-                ← Anterior
-              </button>
-
-              <div className="page-numbers">
-                {pageNumbers.map((pageNumber) =>
-                  typeof pageNumber === "string" ? (
-                    <span className="page-ellipsis" key={pageNumber}>
-                      …
-                    </span>
-                  ) : (
-                    <button
-                      className={`page-number${pageNumber === page ? " is-current" : ""}`}
-                      type="button"
-                      key={pageNumber}
-                      aria-current={pageNumber === page ? "page" : undefined}
-                      onClick={() => goToPage(pageNumber)}
-                    >
-                      {pageNumber}
-                    </button>
-                  ),
-                )}
+              <div className="pagination-navigation">
+                <button
+                  className="page-nav-button"
+                  type="button"
+                  onClick={() => goToPageLink(requestPage.previous)}
+                  disabled={!requestPage.previous}
+                >
+                  ← Anterior
+                </button>
+                <div className="page-numbers">
+                  {pageNumbers.map((pageNumber) =>
+                    typeof pageNumber === "string" ? (
+                      <span className="page-ellipsis" key={pageNumber}>
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        className={`page-number${pageNumber === page ? " is-current" : ""}`}
+                        type="button"
+                        key={pageNumber}
+                        aria-current={pageNumber === page ? "page" : undefined}
+                        onClick={() => goToPage(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  className="page-nav-button"
+                  type="button"
+                  onClick={() => goToPageLink(requestPage.next)}
+                  disabled={!requestPage.next}
+                >
+                  Siguiente →
+                </button>
               </div>
-
-              <button
-                className="page-nav-button"
-                type="button"
-                onClick={() => goToPageLink(requestPage.next)}
-                disabled={!requestPage.next}
-              >
-                Siguiente →
-              </button>
 
               <label className="page-size-control">
                 Por página
@@ -661,10 +703,15 @@ export default function Dashboard() {
           )}
         </section>
       </div>
-      {isCreateModalOpen && (
+      {isRequestModalOpen && (
         <RequestModal
-          onClose={() => setIsCreateModalOpen(false)}
-          onCreated={handleRequestCreated}
+          key={requestToEdit?.id ?? "create"}
+          request={requestToEdit}
+          onClose={() => {
+            setIsRequestModalOpen(false);
+            setRequestToEdit(null);
+          }}
+          onSaved={handleRequestSaved}
         />
       )}
     </main>

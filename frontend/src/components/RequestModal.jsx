@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { createRequest } from "../services/requests.js";
+import { createRequest, updateRequest } from "../services/requests.js";
 
-export default function RequestModal({ onClose, onCreated }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+export default function RequestModal({ request, onClose, onSaved }) {
+  const isEditing = Boolean(request);
+  const [title, setTitle] = useState(request?.title ?? "");
+  const [description, setDescription] = useState(request?.description ?? "");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,16 +33,21 @@ export default function RequestModal({ onClose, onCreated }) {
     setIsSubmitting(true);
 
     try {
-      const request = await createRequest({
-        title: requestTitle,
-        description: requestDescription,
-      });
-      onCreated(request);
+      const savedRequest = isEditing
+        ? await updateRequest(request.id, {
+            title: requestTitle,
+            description: requestDescription,
+          })
+        : await createRequest({
+            title: requestTitle,
+            description: requestDescription,
+          });
+      onSaved(savedRequest);
     } catch (requestError) {
       setError(
         requestError instanceof Error
-          ? `No se pudo crear la solicitud: ${requestError.message}`
-          : "No se pudo crear la solicitud. Inténtalo nuevamente.",
+          ? `No se pudo ${isEditing ? "actualizar" : "crear"} la solicitud: ${requestError.message}`
+          : `No se pudo ${isEditing ? "actualizar" : "crear"} la solicitud. Inténtalo nuevamente.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -61,12 +67,16 @@ export default function RequestModal({ onClose, onCreated }) {
         className="request-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="create-request-title"
+        aria-labelledby="request-modal-title"
       >
         <header className="request-modal-header">
           <div>
-            <p className="eyebrow">Nueva solicitud</p>
-            <h2 id="create-request-title">Crear solicitud</h2>
+            <p className="eyebrow">
+              {isEditing ? "Editar solicitud" : "Nueva solicitud"}
+            </p>
+            <h2 id="request-modal-title">
+              {isEditing ? "Editar solicitud" : "Crear solicitud"}
+            </h2>
           </div>
           <button
             className="modal-close-button"
@@ -80,7 +90,9 @@ export default function RequestModal({ onClose, onCreated }) {
         </header>
 
         <p className="modal-description">
-          Completa los campos para agregar una solicitud a la bandeja.
+          {isEditing
+            ? "Actualiza el título y la descripción de esta solicitud."
+            : "Completa los campos para agregar una solicitud a la bandeja."}
         </p>
 
         {error && (
@@ -90,9 +102,9 @@ export default function RequestModal({ onClose, onCreated }) {
         )}
 
         <form className="request-modal-form" onSubmit={handleSubmit}>
-          <label htmlFor="new-request-title">Título</label>
+          <label htmlFor="request-title">Título</label>
           <input
-            id="new-request-title"
+            id="request-title"
             name="title"
             type="text"
             maxLength={200}
@@ -103,9 +115,9 @@ export default function RequestModal({ onClose, onCreated }) {
             disabled={isSubmitting}
           />
 
-          <label htmlFor="new-request-description">Descripción</label>
+          <label htmlFor="request-description">Descripción</label>
           <textarea
-            id="new-request-description"
+            id="request-description"
             name="description"
             rows={5}
             value={description}
@@ -128,7 +140,13 @@ export default function RequestModal({ onClose, onCreated }) {
               type="submit"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Creando..." : "Crear solicitud"}
+              {isSubmitting
+                ? isEditing
+                  ? "Guardando..."
+                  : "Creando..."
+                : isEditing
+                  ? "Guardar cambios"
+                  : "Crear solicitud"}
             </button>
           </footer>
         </form>

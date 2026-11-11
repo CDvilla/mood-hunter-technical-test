@@ -46,6 +46,14 @@ export function createRequest({ title, description }, { signal } = {}) {
   });
 }
 
+export function updateRequest(id, { title, description }, { signal } = {}) {
+  return authenticatedFetch(`/requests/${id}/`, {
+    method: "PUT",
+    body: JSON.stringify({ title, description }),
+    signal,
+  });
+}
+
 export async function getRequestSummary({
   startDate = "",
   endDate = "",

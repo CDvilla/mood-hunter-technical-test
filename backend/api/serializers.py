@@ -19,6 +19,24 @@ class RequestCreateSerializer(serializers.ModelSerializer):
         return Request.objects.create(status=created_status, **validated_data)
 
 
+class RequestUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Request
+        fields = ["title", "description"]
+
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - {"title", "description"}
+        if extra_fields:
+            raise serializers.ValidationError(
+                {
+                    field: ["Only title and description may be updated."]
+                    for field in sorted(extra_fields)
+                }
+            )
+
+        return attrs
+
+
 class RequestStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Status

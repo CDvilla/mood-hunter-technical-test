@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 function HomeIcon() {
@@ -29,27 +30,69 @@ function LogoutIcon() {
 export default function Sidebar({ onLogout }) {
   const { pathname } = useLocation();
   const homeIsActive = pathname === "/" || pathname === "/home";
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
 
   return (
     <aside
-      className="sidebar"
+      className={`sidebar${menuOpen ? " is-menu-open" : ""}`}
       aria-label="Navegación principal"
-      onMouseEnter={(event) => event.currentTarget.classList.add("is-expanded")}
-      onMouseLeave={(event) =>
-        event.currentTarget.classList.remove("is-expanded")
-      }
+      onMouseEnter={(event) => {
+        if (!window.matchMedia("(max-width: 760px)").matches) {
+          event.currentTarget.classList.add("is-expanded");
+        }
+      }}
+      onMouseLeave={(event) => event.currentTarget.classList.remove("is-expanded")}
     >
-      <NavLink className="sidebar-brand" to="/home" aria-label="Mood Hunter">
-        <span className="brand-mark" aria-hidden="true">
-          M
-        </span>
-        <span className="sidebar-label">Mood Hunter</span>
-      </NavLink>
+      <div className="sidebar-topbar">
+        <NavLink
+          className="sidebar-brand"
+          to="/home"
+          aria-label="Mood Hunter"
+          onClick={closeMenu}
+        >
+          <span className="brand-mark" aria-hidden="true">
+            M
+          </span>
+          <span className="sidebar-label">Mood Hunter</span>
+        </NavLink>
+        <button
+          className="sidebar-menu-toggle"
+          type="button"
+          aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={menuOpen}
+          aria-controls="primary-navigation"
+          onClick={() => setMenuOpen((isOpen) => !isOpen)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {menuOpen ? (
+              <path d="m6 6 12 12M18 6 6 18" />
+            ) : (
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" id="primary-navigation">
         <NavLink
           to="/home"
           end
+          onClick={closeMenu}
           className={({ isActive }) =>
             `sidebar-link${isActive || homeIsActive ? " is-active" : ""}`
           }
@@ -60,6 +103,7 @@ export default function Sidebar({ onLogout }) {
         </NavLink>
         <NavLink
           to="/requests"
+          onClick={closeMenu}
           className={({ isActive }) =>
             `sidebar-link${isActive ? " is-active" : ""}`
           }
@@ -73,7 +117,10 @@ export default function Sidebar({ onLogout }) {
       <button
         className="sidebar-link sidebar-logout"
         type="button"
-        onClick={onLogout}
+        onClick={() => {
+          closeMenu();
+          onLogout();
+        }}
         title="Cerrar sesión"
       >
         <LogoutIcon />

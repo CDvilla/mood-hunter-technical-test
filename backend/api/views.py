@@ -20,6 +20,7 @@ from api.serializers import (
     RequestCreateSerializer,
     RequestSerializer,
     RequestStatusUpdateSerializer,
+    RequestUpdateSerializer,
     RequestSummarySerializer,
     StatusSerializer,
     TokenLoginSerializer,
@@ -197,6 +198,30 @@ class RequestStatusUpdateView(GenericAPIView):
     queryset = Request.objects.select_for_update()
     serializer_class = RequestStatusUpdateSerializer
 
+    @extend_schema(
+        request=RequestUpdateSerializer,
+        responses=RequestSerializer,
+    )
+    @transaction.atomic
+    def put(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = RequestUpdateSerializer(
+            instance,
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        response_serializer = RequestSerializer(
+            instance,
+            context=self.get_serializer_context(),
+        )
+        return Response(response_serializer.data)
+
+    @extend_schema(
+        request=RequestStatusUpdateSerializer,
+        responses=RequestSerializer,
+    )
     @transaction.atomic
     def patch(self, request, *args, **kwargs):
         instance = self.get_object()

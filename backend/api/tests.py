@@ -109,6 +109,12 @@ class AuthenticationApiTests(APITestCase):
                     format="json",
                     **headers,
                 )
+                edit_response = self.client.put(
+                    "/api/requests/1/",
+                    {"title": "Protected", "description": "Needs a token"},
+                    format="json",
+                    **headers,
+                )
                 self.assertEqual(
                     statuses_response.status_code,
                     status.HTTP_401_UNAUTHORIZED,
@@ -119,6 +125,10 @@ class AuthenticationApiTests(APITestCase):
                 )
                 self.assertEqual(
                     update_response.status_code,
+                    status.HTTP_401_UNAUTHORIZED,
+                )
+                self.assertEqual(
+                    edit_response.status_code,
                     status.HTTP_401_UNAUTHORIZED,
                 )
 
@@ -180,6 +190,7 @@ class AuthenticationApiTests(APITestCase):
         request_create = schema["paths"]["/api/requests/"]["post"]
         request_list = schema["paths"]["/api/requests/"]["get"]
         request_status_update = schema["paths"]["/api/requests/{id}/"]["patch"]
+        request_edit = schema["paths"]["/api/requests/{id}/"]["put"]
         statuses = schema["paths"]["/api/statuses/"]["get"]
         self.assertEqual(
             login["requestBody"]["content"]["application/json"]["schema"]["$ref"],
@@ -228,6 +239,26 @@ class AuthenticationApiTests(APITestCase):
         )
         self.assertEqual(
             request_status_update["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/Request",
+        )
+        self.assertEqual(
+            request_edit["requestBody"]["content"]["application/json"]["schema"][
+                "$ref"
+            ],
+            "#/components/schemas/RequestUpdate",
+        )
+        self.assertEqual(
+            set(schema["components"]["schemas"]["RequestUpdate"]["properties"]),
+            {"title", "description"},
+        )
+        self.assertEqual(
+            set(schema["components"]["schemas"]["RequestUpdate"]["required"]),
+            {"title", "description"},
+        )
+        self.assertEqual(
+            request_edit["responses"]["200"]["content"]["application/json"][
                 "schema"
             ]["$ref"],
             "#/components/schemas/Request",
@@ -685,6 +716,62 @@ class RequestStatusUpdateApiTests(AuthenticatedAPITestCase):
             self.request.description,
             "Review the submitted application.",
         )
+
+    def test_put_updates_request_title_and_description(self):
+        response = self.client.put(
+            f"/api/requests/{self.request.pk}/",
+            {
+                "title": "Updated application review",
+                "description": "Updated details for review.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "Updated application review")
+        self.assertEqual(
+            response.data["description"],
+            "Updated details for review.",
+        )
+        self.assertEqual(
+            response.data["status"],
+            {
+                "tag": "created",
+                "name": self.request.status.name,
+            },
+        )
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.title, "Updated application review")
+        self.assertEqual(self.request.description, "Updated details for review.")
+        self.assertEqual(self.request.status.tag, "created")
+
+    def test_put_requires_both_editable_fields(self):
+        for payload in (
+            {"title": "Updated title"},
+            {"description": "Updated description"},
+            {"title": "", "description": "Updated description"},
+            {"title": "Updated title", "description": ""},
+            {
+                "title": "Updated title",
+                "description": "Updated description",
+                "status": "done",
+            },
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.put(
+                    f"/api/requests/{self.request.pk}/",
+                    payload,
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.title, "Review application")
+        self.assertEqual(self.request.description, "Review the submitted application.")
+        self.assertEqual(self.request.status.tag, "created")
 
     def test_invalid_transition_does_not_change_the_request(self):
         updated_at = self.request.updated_at
