@@ -1,6 +1,6 @@
 # Technical Test
 
-Infraestructura inicial de desarrollo para un backend Django REST Framework, un frontend React/Vite y MySQL. No contiene todavía funcionalidades de solicitudes ni integración con LLM.
+Entorno de desarrollo con backend Django REST Framework, frontend React/Vite y MySQL. El backend ofrece autenticación por token, creación de solicitudes y consulta del catálogo de estados; no incluye integración con LLM.
 
 ## Tecnologías y versiones
 
@@ -37,7 +37,7 @@ database/      SQL inicial (sin tablas de negocio)
 docker-compose.yml
 ```
 
-El backend conserva el modelo y CRUD genérico `Item`, ofrece la creación de solicitudes en `POST /api/requests/` y expone el catálogo de estados en `GET /api/statuses/`. El estado inicial se asigna en el servidor.
+El backend permite crear solicitudes en `POST /api/requests/` y consultar el catálogo de estados en `GET /api/statuses/`. El estado inicial se asigna en el servidor.
 
 ## Preparar y levantar el entorno
 
@@ -107,7 +107,7 @@ curl -X POST http://localhost:8000/api/auth/logout/ \
   -H 'Authorization: Token TU_TOKEN'
 ```
 
-Swagger UI en `/api/docs/` ofrece el botón **Authorize** para introducir `Token <token>` (incluido el prefijo) y probar los endpoints protegidos. El health check, el esquema OpenAPI y Swagger UI permanecen públicos; los endpoints de negocio requieren token.
+Swagger UI en `/api/docs/` ofrece el botón **Authorize** para introducir únicamente el valor del token; Swagger añade el prefijo `Token` al encabezado `Authorization`. El health check, el esquema OpenAPI y Swagger UI permanecen públicos; los endpoints de negocio requieren token.
 
 La URL que usa el navegador para la API se configura con `VITE_API_BASE_URL`. Los orígenes del frontend permitidos por el backend se configuran con `CORS_ALLOWED_ORIGINS`.
 

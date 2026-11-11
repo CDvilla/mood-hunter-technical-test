@@ -1,22 +1,16 @@
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import path
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
-from rest_framework.routers import DefaultRouter
-
 from api.views import (
-    ItemViewSet,
     RequestCreateView,
     StatusListView,
     TokenLoginView,
     TokenLogoutView,
     health_check,
 )
-
-router = DefaultRouter()
-router.register("items", ItemViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -42,5 +36,4 @@ urlpatterns = [
         ),
         name="swagger-ui",
     ),
-    path("api/", include(router.urls)),
 ]

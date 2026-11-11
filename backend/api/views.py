@@ -10,12 +10,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
-from rest_framework.viewsets import ModelViewSet
 
-from api.models import Item, Request, Status
+from api.models import Request, Status
 from api.serializers import (
     AuthenticationErrorSerializer,
-    ItemSerializer,
     LogoutResponseSerializer,
     RequestCreateSerializer,
     RequestSerializer,
@@ -38,7 +36,6 @@ def health_check(request):
         "Invalid credentials return the same generic error. Use the token in "
         "subsequent protected requests as `Authorization: Token <token>`."
     ),
-    request=TokenLoginSerializer,
     responses={
         200: TokenSerializer,
         400: OpenApiResponse(
@@ -72,6 +69,7 @@ def health_check(request):
 class TokenLoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    serializer_class = TokenLoginSerializer
 
     def post(self, request):
         serializer = TokenLoginSerializer(
@@ -84,20 +82,13 @@ class TokenLoginView(APIView):
 
 @extend_schema(
     summary="Log out",
-    description=(
-        "Requires a valid token. Deletes the authenticated user's current DRF "
-        "token. Include the authorization header as shown:\n\n"
-        "```http\n"
-        "POST /api/auth/logout/ HTTP/1.1\n"
-        "Authorization: Token <token>\n"
-        "```\n"
-    ),
+    description="Deletes the authenticated user's current DRF token.",
     request=None,
     responses={
         200: LogoutResponseSerializer,
         401: OpenApiResponse(
             response=AuthenticationErrorSerializer,
-            description="Authentication credentials were not provided or are invalid."
+            description="Authentication credentials were not provided or are invalid.",
         ),
     },
     examples=[
@@ -117,15 +108,11 @@ class TokenLoginView(APIView):
 )
 class TokenLogoutView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = LogoutResponseSerializer
 
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
         return Response({"detail": "Successfully logged out."})
-
-
-class ItemViewSet(ModelViewSet):
-    queryset = Item.objects.all()
-    serializer_class = ItemSerializer
 
 
 @extend_schema(
@@ -135,7 +122,6 @@ class ItemViewSet(ModelViewSet):
         "sets its initial status to `created`. The response exposes the stable "
         "status tag, never the catalog's numeric ID."
     ),
-    request=RequestCreateSerializer,
     responses={
         201: RequestSerializer,
         400: OpenApiResponse(
@@ -201,8 +187,7 @@ class RequestCreateView(CreateAPIView):
     summary="List request statuses",
     description=(
         "Returns the available statuses in deterministic order. Statuses are "
-        "managed by database migrations and cannot be changed through this API. "
-        "Requires `Authorization: Token <token>`."
+        "managed by database migrations and cannot be changed through this API."
     ),
     responses={
         200: StatusSerializer(many=True),
