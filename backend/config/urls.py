@@ -6,6 +6,7 @@ from drf_spectacular.views import (
 )
 from api.views import (
     RequestCreateView,
+    RequestStatusUpdateView,
     StatusListView,
     TokenLoginView,
     TokenLogoutView,
@@ -18,6 +19,11 @@ urlpatterns = [
     path("api/auth/login/", TokenLoginView.as_view(), name="token-login"),
     path("api/auth/logout/", TokenLogoutView.as_view(), name="token-logout"),
     path("api/requests/", RequestCreateView.as_view(), name="request-create"),
+    path(
+        "api/requests/<int:pk>/",
+        RequestStatusUpdateView.as_view(),
+        name="request-status-update",
+    ),
     path("api/statuses/", StatusListView.as_view(), name="status-list"),
     path(
         "api/schema/",

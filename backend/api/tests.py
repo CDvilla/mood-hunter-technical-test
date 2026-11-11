@@ -96,12 +96,22 @@ class AuthenticationApiTests(APITestCase):
                     format="json",
                     **headers,
                 )
+                update_response = self.client.patch(
+                    "/api/requests/1/",
+                    {"status": "in_review"},
+                    format="json",
+                    **headers,
+                )
                 self.assertEqual(
                     statuses_response.status_code,
                     status.HTTP_401_UNAUTHORIZED,
                 )
                 self.assertEqual(
                     requests_response.status_code,
+                    status.HTTP_401_UNAUTHORIZED,
+                )
+                self.assertEqual(
+                    update_response.status_code,
                     status.HTTP_401_UNAUTHORIZED,
                 )
 
@@ -151,6 +161,7 @@ class AuthenticationApiTests(APITestCase):
         login = schema["paths"]["/api/auth/login/"]["post"]
         logout = schema["paths"]["/api/auth/logout/"]["post"]
         request_create = schema["paths"]["/api/requests/"]["post"]
+        request_status_update = schema["paths"]["/api/requests/{id}/"]["patch"]
         statuses = schema["paths"]["/api/statuses/"]["get"]
         self.assertEqual(
             login["requestBody"]["content"]["application/json"]["schema"]["$ref"],
@@ -173,6 +184,26 @@ class AuthenticationApiTests(APITestCase):
         )
         self.assertEqual(
             request_create["responses"]["201"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/Request",
+        )
+        self.assertEqual(
+            request_status_update["requestBody"]["content"]["application/json"][
+                "schema"
+            ]["$ref"],
+            "#/components/schemas/PatchedRequestStatusUpdate",
+        )
+        self.assertEqual(
+            set(
+                schema["components"]["schemas"]["PatchedRequestStatusUpdate"][
+                    "properties"
+                ]
+            ),
+            {"status"},
+        )
+        self.assertEqual(
+            request_status_update["responses"]["200"]["content"]["application/json"][
                 "schema"
             ]["$ref"],
             "#/components/schemas/Request",
@@ -378,6 +409,106 @@ class RequestCreationApiTests(AuthenticatedAPITestCase):
                 )
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertEqual(Request.objects.count(), 0)
+
+
+class RequestStatusUpdateApiTests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.request = Request.objects.create(
+            title="Review application",
+            description="Review the submitted application.",
+            status=Status.objects.get(tag="created"),
+        )
+
+    def test_allowed_transition_updates_only_the_status(self):
+        response = self.client.patch(
+            f"/api/requests/{self.request.pk}/",
+            {"status": "in_review"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "in_review")
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.tag, "in_review")
+        self.assertEqual(self.request.title, "Review application")
+        self.assertEqual(
+            self.request.description,
+            "Review the submitted application.",
+        )
+
+    def test_invalid_transition_does_not_change_the_request(self):
+        updated_at = self.request.updated_at
+        response = self.client.patch(
+            f"/api/requests/{self.request.pk}/",
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.tag, "created")
+        self.assertEqual(self.request.updated_at, updated_at)
+        self.assertEqual(self.request.title, "Review application")
+        self.assertEqual(
+            self.request.description,
+            "Review the submitted application.",
+        )
+
+    def test_paused_request_cannot_transition_directly_to_done(self):
+        self.request.status = Status.objects.get(tag="paused")
+        self.request.save(update_fields=["status"])
+
+        response = self.client.patch(
+            f"/api/requests/{self.request.pk}/",
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.tag, "paused")
+
+    def test_unknown_status_is_rejected(self):
+        response = self.client.patch(
+            f"/api/requests/{self.request.pk}/",
+            {"status": "unknown"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.tag, "created")
+
+    def test_other_fields_and_missing_status_are_rejected(self):
+        for payload in (
+            {"status": "in_review", "title": "Altered title"},
+            {"status": "in_review", "status_id": Status.objects.get(tag="done").pk},
+            {"title": "Altered title"},
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.patch(
+                    f"/api/requests/{self.request.pk}/",
+                    payload,
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.tag, "created")
+        self.assertEqual(self.request.title, "Review application")
+
+    def test_missing_request_returns_404(self):
+        response = self.client.patch(
+            "/api/requests/999999/",
+            {"status": "in_review"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class RequestStatusTransitionTests(SimpleTestCase):

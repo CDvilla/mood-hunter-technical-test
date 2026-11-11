@@ -2,6 +2,10 @@ from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 
+from api.domain import (
+    InvalidRequestStatusTransition,
+    validate_request_status_transition,
+)
 from api.models import Request, Status
 
 
@@ -25,6 +29,38 @@ class RequestSerializer(serializers.ModelSerializer):
         model = Request
         fields = ["id", "title", "description", "status", "created_at", "updated_at"]
         read_only_fields = fields
+
+
+class RequestStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.SlugRelatedField(
+        queryset=Status.objects.all(),
+        slug_field="tag",
+    )
+
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - {"status"}
+        if extra_fields:
+            raise serializers.ValidationError(
+                {
+                    field: ["Only the status field may be updated."]
+                    for field in sorted(extra_fields)
+                }
+            )
+
+        try:
+            validate_request_status_transition(
+                self.instance.status.tag,
+                attrs["status"].tag,
+            )
+        except InvalidRequestStatusTransition as exc:
+            raise serializers.ValidationError({"status": str(exc)}) from exc
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        instance.status = validated_data["status"]
+        instance.save(update_fields=["status", "updated_at"])
+        return instance
 
 
 class StatusSerializer(serializers.ModelSerializer):

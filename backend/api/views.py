@@ -1,7 +1,8 @@
+from django.db import transaction
 from django.http import JsonResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, ListAPIView
+from rest_framework.generics import CreateAPIView, GenericAPIView, ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
@@ -12,6 +13,7 @@ from api.serializers import (
     LogoutResponseSerializer,
     RequestCreateSerializer,
     RequestSerializer,
+    RequestStatusUpdateSerializer,
     StatusSerializer,
     TokenLoginSerializer,
     TokenSerializer,
@@ -66,6 +68,26 @@ class RequestCreateView(CreateAPIView):
             status=status.HTTP_201_CREATED,
             headers=headers,
         )
+
+
+@extend_schema(
+    responses=RequestSerializer,
+)
+class RequestStatusUpdateView(GenericAPIView):
+    queryset = Request.objects.select_for_update()
+    serializer_class = RequestStatusUpdateSerializer
+
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        response_serializer = RequestSerializer(
+            instance,
+            context=self.get_serializer_context(),
+        )
+        return Response(response_serializer.data)
 
 
 class StatusListView(ListAPIView):
