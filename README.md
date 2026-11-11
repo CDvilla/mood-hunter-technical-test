@@ -1,6 +1,6 @@
 # Technical Test
 
-Entorno de desarrollo con backend Django REST Framework, frontend React/Vite y MySQL. El backend ofrece autenticación por token, creación de solicitudes y consulta del catálogo de estados; no incluye integración con LLM.
+Entorno de desarrollo con backend Django REST Framework, frontend React/Vite y MySQL. El backend ofrece autenticación por token, gestión de solicitudes, consulta del catálogo de estados y generación opcional de resúmenes con Gemini.
 
 ## Tecnologías y versiones
 
@@ -41,17 +41,34 @@ El backend permite crear solicitudes en `POST /api/requests/` y consultar el cat
 
 ## Preparar y levantar el entorno
 
-Desde Ubuntu/WSL2, antes de levantar el proyecto por primera vez, completa `.env` con una clave secreta fuerte para Django y configura `DJANGO_SUPERUSER_USERNAME` y `DJANGO_SUPERUSER_PASSWORD` con credenciales iniciales únicas y robustas. No guardes ni compartas esos valores en Git. La contraseña del administrador debe satisfacer los validadores de contraseñas de Django.
+Clona el repositorio y ejecuta estos pasos desde su directorio raíz. Se requiere Docker Engine y Docker Compose; en Windows puedes usar Docker Desktop con integración WSL2. No es necesario instalar Python, Node.js ni MySQL en el host.
 
 ```bash
-cd /home/carlos/projects/technical_test
-if [ ! -f .env ]; then cp .env.example .env; fi
+git clone https://github.com/CDvilla/mood-hunter-technical-test.git
+cd mood-hunter-technical-test
+cp .env.example .env
+```
+
+Edita `.env` antes del primer arranque:
+
+- Define `DJANGO_SECRET_KEY` con un valor aleatorio fuerte (por ejemplo, `openssl rand -hex 32`).
+- Define `DJANGO_SUPERUSER_USERNAME` y `DJANGO_SUPERUSER_PASSWORD` con credenciales únicas. La contraseña debe satisfacer los validadores de Django.
+- Define valores no vacíos y únicos para `DB_PASSWORD` y `DB_ROOT_PASSWORD`.
+- `GEMINI_API_KEY` es opcional para levantar la aplicación. Déjala vacía si no necesitas resúmenes con IA; para esa función, proporciona una clave válida de Gemini.
+
+No compartas ni subas `.env` a Git. La plantilla `.env.example` no contiene credenciales válidas.
+
+```bash
 docker compose up --build
 ```
 
-El `.env` incluido contiene valores ilustrativos exclusivos para desarrollo local. La copia protege esos valores de Git, pero no son adecuados para producción. Cambia las claves y contraseñas y configura `DJANGO_DEBUG=false` antes de desplegar.
+La primera ejecución construye las imágenes, crea el esquema de base de datos, aplica las migraciones y crea el usuario administrador. Los cambios en `backend/` y `frontend/` se reflejan mediante bind mounts y hot reload. La base empieza sin solicitudes de ejemplo; crea solicitudes desde la interfaz para probar el flujo.
 
-Compose espera a que el health check de MySQL termine antes de iniciar Django. Django ejecuta `migrate` y luego `ensure_admin_user` al arrancar. Este comando crea el superusuario nativo una sola vez; en arranques posteriores conserva la cuenta existente. Si falta una variable, la contraseña no cumple las validaciones o una migración falla, el contenedor no continúa como si hubiera iniciado correctamente. Los cambios en `backend/` y `frontend/` se reflejan mediante bind mounts y hot reload.
+La aplicación puede usarse sin `GEMINI_API_KEY`, pero la generación de resúmenes con IA no estará disponible. El backend necesita conectividad saliente para llamar a Gemini cuando esa función se usa. El modo de red `mirrored` de WSL, si se necesita en una máquina concreta, es una configuración local de Windows/WSL y no una dependencia del repositorio. Si Gemini no conecta, verifica primero la conectividad desde el contenedor del backend; cambia la configuración de red de WSL solo si tu entorno lo requiere.
+
+Esta configuración es para desarrollo local, no para producción. Antes de desplegar en producción, configura secretos seguros, `DJANGO_DEBUG=false` y revisa hosts, orígenes permitidos, exposición de puertos y el servidor de aplicaciones.
+
+Compose espera a que el health check de MySQL termine antes de iniciar Django. Si falta una variable, la contraseña no cumple las validaciones o una migración falla, el backend no continúa como si hubiera iniciado correctamente. Al reiniciar, el usuario administrador existente se conserva.
 
 ## Acceso
 
