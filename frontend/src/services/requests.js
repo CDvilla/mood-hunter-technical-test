@@ -38,6 +38,14 @@ export function getStatuses({ signal } = {}) {
   return authenticatedFetch("/statuses/", { signal });
 }
 
+export function createRequest({ title, description }, { signal } = {}) {
+  return authenticatedFetch("/requests/", {
+    method: "POST",
+    body: JSON.stringify({ title, description }),
+    signal,
+  });
+}
+
 export async function getRequestSummary({ startDate, endDate, signal }) {
   const params = new URLSearchParams({
     start_date: startDate,

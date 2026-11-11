@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../services/api.js";
+import RequestModal from "./RequestModal.jsx";
 import {
   getRequestSummary,
   getRequests,
@@ -139,6 +140,8 @@ export default function Dashboard({ onLogout }) {
   const [summaryCanExpand, setSummaryCanExpand] = useState(false);
   const [actionError, setActionError] = useState("");
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [requestsReloadKey, setRequestsReloadKey] = useState(0);
   const summaryTextRef = useRef(null);
 
   useEffect(() => {
@@ -177,7 +180,7 @@ export default function Dashboard({ onLogout }) {
 
     loadRequests();
     return () => controller.abort();
-  }, [filters, page, pageSize]);
+  }, [filters, page, pageSize, requestsReloadKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -277,6 +280,21 @@ export default function Dashboard({ onLogout }) {
     } finally {
       setUpdatingRequestId(null);
     }
+  }
+
+  function handleRequestCreated() {
+    const emptyFilters = {
+      search: "",
+      status: "",
+      start_date: "",
+      end_date: "",
+    };
+
+    setFilterDraft(emptyFilters);
+    setFilters(emptyFilters);
+    setPage(1);
+    setIsCreateModalOpen(false);
+    setRequestsReloadKey((current) => current + 1);
   }
 
   function applyFilters(event) {
@@ -407,11 +425,19 @@ export default function Dashboard({ onLogout }) {
               <p className="eyebrow">Bandeja de trabajo</p>
               <h2 id="requests-title">Solicitudes</h2>
             </div>
-            <span className="request-count">
-              {requests.length}{" "}
-              de {requestPage.count}{" "}
-              {requestPage.count === 1 ? "solicitud" : "solicitudes"}
-            </span>
+            <div className="request-heading-actions">
+              <span className="request-count">
+                {requests.length} de {requestPage.count}{" "}
+                {requestPage.count === 1 ? "solicitud" : "solicitudes"}
+              </span>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                + Crear solicitud
+              </button>
+            </div>
           </div>
 
           <form className="request-filters" onSubmit={applyFilters}>
@@ -608,6 +634,12 @@ export default function Dashboard({ onLogout }) {
           )}
         </section>
       </div>
+      {isCreateModalOpen && (
+        <RequestModal
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={handleRequestCreated}
+        />
+      )}
     </main>
   );
 }
