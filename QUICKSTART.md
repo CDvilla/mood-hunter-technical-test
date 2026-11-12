@@ -4,7 +4,7 @@ Guía directa para ejecutar el proyecto en desarrollo local.
 
 ## Requisitos
 
-Docker Desktop con Docker Compose. En Windows, usa la integración WSL2 y ejecuta los comandos desde Ubuntu/WSL.
+Docker Desktop con Docker Compose. En Windows, puedes ejecutar los comandos desde PowerShell o Windows Terminal; no es trictamente necesario abrir Ubuntu/WSL, pero es recomendable.
 
 ## Pasos
 
